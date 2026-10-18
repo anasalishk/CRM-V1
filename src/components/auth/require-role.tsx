@@ -15,6 +15,7 @@ interface RequireRoleProps {
    *  absent until we're sure. Pass a placeholder if a layout slot
    *  would collapse and re-flow when the role resolves. */
   fallback?: ReactNode;
+
   children: ReactNode;
 }
 

@@ -9,6 +9,8 @@ import {
 describe('isWebhookEvent', () => {
   it('accepts every declared event and rejects others', () => {
     for (const e of WEBHOOK_EVENTS) expect(isWebhookEvent(e)).toBe(true);
+    expect(isWebhookEvent('message.echo')).toBe(true);
+    expect(isWebhookEvent('contact.updated')).toBe(true);
     expect(isWebhookEvent('message.deleted')).toBe(false);
     expect(isWebhookEvent(42)).toBe(false);
   });
@@ -19,14 +21,26 @@ describe('every event has a description', () => {
     for (const e of WEBHOOK_EVENTS) {
       expect(WEBHOOK_EVENT_DESCRIPTIONS[e]).toBeTruthy();
     }
+    expect(WEBHOOK_EVENT_DESCRIPTIONS['message.echo']).toBe(
+      'A message was sent from the WhatsApp Business mobile app'
+    );
+    expect(WEBHOOK_EVENT_DESCRIPTIONS['contact.updated']).toBe(
+      'A contact was created or renamed'
+    );
   });
 });
 
 describe('normalizeEvents', () => {
   it('de-duplicates a valid list', () => {
     expect(
-      normalizeEvents(['message.received', 'message.received', 'conversation.created'])
-    ).toEqual(['message.received', 'conversation.created']);
+      normalizeEvents([
+        'message.received',
+        'message.received',
+        'conversation.created',
+        'message.echo',
+        'contact.updated',
+      ])
+    ).toEqual(['message.received', 'conversation.created', 'message.echo', 'contact.updated']);
   });
 
   it('rejects an unknown event', () => {

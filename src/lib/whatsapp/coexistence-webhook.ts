@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact } from '@/lib/contacts/dedupe'
+import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 
 export interface SmbEchoMessage {
   from: string
@@ -105,6 +106,100 @@ async function findOrCreateContactByPhone(
   }
 
   return created
+}
+
+interface AppStateContactOutcome {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  contact: any
+  change: 'created' | 'renamed' | null
+  previousName: string | null
+}
+
+/**
+ * Find, create, or rename contact during smb_app_state_sync.
+ * Unlike findOrCreateContactByPhone, updates contacts.name when the sync
+ * provides a non-empty name differing from the stored name.
+ */
+async function syncAppStateContact(
+  supabase: SupabaseClient,
+  accountId: string,
+  userId: string,
+  phone: string,
+  name?: string
+): Promise<AppStateContactOutcome | null> {
+  const normalized = normalizePhone(phone)
+  if (!normalized) return null
+
+  const trimmedName = name?.trim() || undefined
+
+  // 1. Check existing
+  const existing = await findExistingContact(supabase, accountId, normalized)
+  if (existing) {
+    if (trimmedName && trimmedName !== existing.name) {
+      const previousName = existing.name ?? null
+      await supabase
+        .from('contacts')
+        .update({ name: trimmedName, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+
+      existing.name = trimmedName
+      return {
+        contact: existing,
+        change: 'renamed',
+        previousName,
+      }
+    }
+    return {
+      contact: existing,
+      change: null,
+      previousName: existing.name ?? null,
+    }
+  }
+
+  // 2. Insert new contact
+  const { data: created, error } = await supabase
+    .from('contacts')
+    .insert({
+      account_id: accountId,
+      user_id: userId,
+      phone: normalized,
+      name: trimmedName,
+    })
+    .select()
+    .maybeSingle()
+
+  if (error) {
+    // If unique violation race, look up existing
+    const raced = await findExistingContact(supabase, accountId, normalized)
+    if (raced) {
+      if (trimmedName && trimmedName !== raced.name) {
+        const previousName = raced.name ?? null
+        await supabase
+          .from('contacts')
+          .update({ name: trimmedName, updated_at: new Date().toISOString() })
+          .eq('id', raced.id)
+
+        raced.name = trimmedName
+        return {
+          contact: raced,
+          change: 'renamed',
+          previousName,
+        }
+      }
+      return {
+        contact: raced,
+        change: null,
+        previousName: raced.name ?? null,
+      }
+    }
+    return null
+  }
+
+  return {
+    contact: created,
+    change: 'created',
+    previousName: null,
+  }
 }
 
 /**
@@ -237,6 +332,18 @@ export async function handleSmbMessageEchoes(
         updated_at: new Date().toISOString(),
       })
       .eq('id', conversation.id)
+
+    // Announce message.echo to webhooks
+    await dispatchWebhookEvent(supabase, config.account_id, 'message.echo', {
+      conversation_id: conversation.id,
+      contact_id: contact.id,
+      contact_phone: customerPhone,
+      whatsapp_message_id: echo.id,
+      content_type: contentType,
+      text: contentText,
+      source: 'business_app',
+      sent_at: createdAt,
+    })
   }
 }
 
@@ -267,7 +374,22 @@ export async function handleSmbAppStateSync(
       if (!phone) continue
 
       const name = c.name || [c.first_name, c.last_name].filter(Boolean).join(' ') || undefined
-      await findOrCreateContactByPhone(supabase, config.account_id, config.user_id, phone, name)
+      const outcome = await syncAppStateContact(
+        supabase,
+        config.account_id,
+        config.user_id,
+        phone,
+        name
+      )
+      if (!outcome || !outcome.change) continue
+
+      await dispatchWebhookEvent(supabase, config.account_id, 'contact.updated', {
+        contact_id: outcome.contact.id,
+        phone: normalizePhone(outcome.contact.phone || phone),
+        name: outcome.contact.name ?? (name?.trim() || null),
+        previous_name: outcome.previousName,
+        change: outcome.change,
+      })
     }
   }
 

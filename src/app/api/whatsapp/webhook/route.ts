@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
-import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
+import { getMediaUrl } from '@/lib/whatsapp/meta-api'
 import { mirrorInboundMedia } from '@/lib/whatsapp/mirror-inbound-media'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import {
@@ -1073,9 +1073,13 @@ async function processMessage(
   await dispatchWebhookEvent(supabaseAdmin(), accountId, 'message.received', {
     conversation_id: conversation.id,
     contact_id: contactRecord.id,
+    contact_phone: normalizePhone(contactRecord.phone || ''),
+    contact_name: contactRecord.name ?? null,
     whatsapp_message_id: message.id,
     content_type: contentType,
     text: contentText,
+    interactive_reply_id: interactiveReplyId ?? null,
+    context_message_id: message.context?.id ?? null,
   })
 }
 

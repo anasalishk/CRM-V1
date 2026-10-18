@@ -303,6 +303,8 @@ things happen in your account. **Migration required:** apply
 | `message.received`       | An inbound message arrives from a contact         |
 | `message.status_updated` | A message you sent changed delivery status        |
 | `conversation.created`   | A new conversation is opened for a contact        |
+| `message.echo`           | A message was sent from the WhatsApp Business app |
+| `contact.updated`        | A contact was created or renamed by sync          |
 
 ### Managing endpoints
 
@@ -339,13 +341,53 @@ delivery uuid you can dedupe on, and `data` varies by `event`:
 
 `data` by event:
 
+`message.received` payloads include the following fields:
+- `conversation_id`: internal UUID of the conversation thread
+- `contact_id`: internal UUID of the contact
+- `contact_phone`: digits-only phone number of the sender
+- `contact_name`: contact name, or `null` if unset
+- `whatsapp_message_id`: Meta WhatsApp message ID (`wamid.…`)
+- `content_type`: message type (`text`, `image`, `document`, `audio`, `video`, `location`, `interactive`)
+- `text`: text body or media caption
+- `interactive_reply_id`: ID of the button/list reply or template quick-reply payload tapped by the contact, or `null`
+- `context_message_id`: WhatsApp message ID of the parent message when replying/quoting, or `null`
+
 ```jsonc
 // message.received
-{ "conversation_id": "…", "contact_id": "…", "whatsapp_message_id": "wamid.…", "content_type": "text", "text": "Hi 👋" }
+{
+  "conversation_id": "…",
+  "contact_id": "…",
+  "contact_phone": "14155550123",
+  "contact_name": "Jane Doe",
+  "whatsapp_message_id": "wamid.…",
+  "content_type": "text",
+  "text": "Hi 👋",
+  "interactive_reply_id": null,
+  "context_message_id": null
+}
 // conversation.created
 { "conversation_id": "…", "contact_id": "…" }
 // message.status_updated
 { "whatsapp_message_id": "wamid.…", "conversation_id": "…", "status": "delivered" }
+// message.echo
+{
+  "conversation_id": "…",
+  "contact_id": "…",
+  "contact_phone": "14155550123",
+  "whatsapp_message_id": "wamid.…",
+  "content_type": "text",
+  "text": "Hello from the mobile app",
+  "source": "business_app",
+  "sent_at": "2026-07-01T12:00:00.000Z"
+}
+// contact.updated
+{
+  "contact_id": "…",
+  "phone": "14155550123",
+  "name": "Jane Doe",
+  "previous_name": null,
+  "change": "created"
+}
 ```
 
 Headers: `X-Wacrm-Event`, `X-Wacrm-Webhook-Id`, and `X-Wacrm-Signature`.

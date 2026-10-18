@@ -425,6 +425,22 @@ describe('inbound webhook: idempotent insert (#367)', () => {
     expect(h.state.rpcCalls).toHaveLength(1)
     expect(h.dispatchInboundToFlows).toHaveBeenCalledTimes(1)
     expect(h.dispatchWebhookEvent).toHaveBeenCalledTimes(1)
+    expect(h.dispatchWebhookEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'acc-1',
+      'message.received',
+      {
+        conversation_id: 'conv-1',
+        contact_id: 'contact-1',
+        contact_phone: '15551230000',
+        contact_name: 'Ada',
+        whatsapp_message_id: 'wamid.TEST1',
+        content_type: 'text',
+        text: 'hello',
+        interactive_reply_id: null,
+        context_message_id: null,
+      }
+    )
   })
 
   it('a replayed delivery is a no-op: no unread bump, no fan-out', async () => {
@@ -501,6 +517,23 @@ describe('inbound webhook: template quick-reply buttons (#478)', () => {
     // The AI auto-reply must stay out of it — a button tap is not a
     // free-text question.
     expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled()
+
+    expect(h.dispatchWebhookEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'acc-1',
+      'message.received',
+      {
+        conversation_id: 'conv-1',
+        contact_id: 'contact-1',
+        contact_phone: '15551230000',
+        contact_name: 'Ada',
+        whatsapp_message_id: 'wamid.BTN1',
+        content_type: 'interactive',
+        text: 'Yes, interested',
+        interactive_reply_id: 'YES_INTERESTED',
+        context_message_id: 'wamid.BROADCAST1',
+      }
+    )
   })
 
   it('falls back to the label when the template button carries no payload', async () => {

@@ -9,6 +9,14 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [Unreleased]
+
+### Added
+
+- **Richer `message.received` webhook payload.** Outbound `message.received` events now include `contact_phone` (normalized digits-only phone number), `contact_name` (display name or null), `interactive_reply_id` (id of interactive reply button/list row or quick-reply template button payload), and `context_message_id` (Meta message id when customer swipe-replies/quotes).
+- **`message.echo` webhook event.** Outbound webhooks can now subscribe to `message.echo` to receive messages sent by staff from the WhatsApp Business mobile app in coexistence mode (`smb_message_echoes`).
+- **`contact.updated` webhook event & contact rename sync.** Fixed an issue where contact name changes in the WhatsApp Business mobile app did not update the CRM during app-state sync (`smb_app_state_sync`). Created and renamed contacts from sync now dispatch `contact.updated` webhook events.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same
