@@ -347,6 +347,51 @@ export async function handleSmbMessageEchoes(
   }
 }
 
+type AppStateItem = { action: string; phone?: string; name?: string }
+type RawStateContact = {
+  full_name?: string
+  first_name?: string
+  last_name?: string
+  phone_number?: string
+  wa_id?: string
+}
+type RawStateEntry = { type?: string; action?: string; contact?: RawStateContact }
+type RawLegacyContact = {
+  wa_id?: string
+  input?: string
+  name?: string
+  first_name?: string
+  last_name?: string
+}
+
+/**
+ * Meta's documented shape: `state_sync: [{ type: 'contact', action,
+ * contact: { full_name, first_name, phone_number } }]`. The older
+ * `contacts` + top-level `action` shape is still accepted.
+ */
+function appStateContactItems(value: {
+  state_sync?: RawStateEntry[]
+  contacts?: RawLegacyContact[]
+  action?: string
+}): AppStateItem[] {
+  const joinName = (first?: string, last?: string) =>
+    [first, last].filter(Boolean).join(' ') || undefined
+  if (Array.isArray(value.state_sync)) {
+    return value.state_sync
+      .filter((s) => !s?.type || s.type === 'contact')
+      .map((s) => ({
+        action: s.action || 'add',
+        phone: s.contact?.phone_number || s.contact?.wa_id,
+        name: s.contact?.full_name || joinName(s.contact?.first_name, s.contact?.last_name),
+      }))
+  }
+  return (value.contacts || []).map((c) => ({
+    action: value.action || 'add',
+    phone: c.wa_id || c.input,
+    name: c.name || joinName(c.first_name, c.last_name),
+  }))
+}
+
 /**
  * 2. Handle `smb_app_state_sync`
  * Synchronizes contacts from the phone address book into wacrm Contacts without duplicates.
@@ -364,33 +409,32 @@ export async function handleSmbAppStateSync(
     return
   }
 
-  const action = value.action || 'add'
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contactsList: any[] = value.contacts || []
+  // Meta's documented shape: `state_sync: [{ type: 'contact', action,
+  // contact: { full_name, first_name, phone_number } }]`. The older
+  // `contacts` + top-level `action` shape is still accepted.
+  const items = appStateContactItems(value)
 
-  if (action === 'add' || action === 'update') {
-    for (const c of contactsList) {
-      const phone = c.wa_id || c.input
-      if (!phone) continue
+  for (const item of items) {
+    if (item.action !== 'add' && item.action !== 'update') continue
+    const phone = item.phone
+    if (!phone) continue
+    const name = item.name
+    const outcome = await syncAppStateContact(
+      supabase,
+      config.account_id,
+      config.user_id,
+      phone,
+      name
+    )
+    if (!outcome || !outcome.change) continue
 
-      const name = c.name || [c.first_name, c.last_name].filter(Boolean).join(' ') || undefined
-      const outcome = await syncAppStateContact(
-        supabase,
-        config.account_id,
-        config.user_id,
-        phone,
-        name
-      )
-      if (!outcome || !outcome.change) continue
-
-      await dispatchWebhookEvent(supabase, config.account_id, 'contact.updated', {
-        contact_id: outcome.contact.id,
-        phone: normalizePhone(outcome.contact.phone || phone),
-        name: outcome.contact.name ?? (name?.trim() || null),
-        previous_name: outcome.previousName,
-        change: outcome.change,
-      })
-    }
+    await dispatchWebhookEvent(supabase, config.account_id, 'contact.updated', {
+      contact_id: outcome.contact.id,
+      phone: normalizePhone(outcome.contact.phone || phone),
+      name: outcome.contact.name ?? (name?.trim() || null),
+      previous_name: outcome.previousName,
+      change: outcome.change,
+    })
   }
 
   // Update sync status on whatsapp_config

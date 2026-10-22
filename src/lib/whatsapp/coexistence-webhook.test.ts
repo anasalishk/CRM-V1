@@ -304,6 +304,38 @@ describe('coexistence-webhook', () => {
     )
   })
 
+  it('reads Meta\'s documented state_sync payload (full_name / phone_number)', async () => {
+    const value = {
+      messaging_product: 'whatsapp',
+      metadata: { phone_number_id: 'phone-1' },
+      state_sync: [
+        {
+          type: 'contact',
+          contact: { full_name: 'Jane Doe', first_name: 'Jane', phone_number: '16505559999' },
+          action: 'add',
+          metadata: { timestamp: '1717152000' },
+        },
+        { type: 'contact', contact: { phone_number: '16505558888' }, action: 'remove' },
+      ],
+    }
+
+    await handleSmbAppStateSync(mockSupabase, value, 'waba-1')
+
+    expect(dispatchWebhookEvent).toHaveBeenCalledTimes(1)
+    expect(dispatchWebhookEvent).toHaveBeenCalledWith(
+      mockSupabase,
+      'acc-1',
+      'contact.updated',
+      {
+        contact_id: 'contact-new',
+        phone: '16505559999',
+        name: 'Jane Doe',
+        previous_name: null,
+        change: 'created',
+      }
+    )
+  })
+
   it('renames contact and dispatches contact.updated with change=renamed when sync provides differing name', async () => {
     const updateSpy = vi.fn().mockReturnThis()
     const eqSpy = vi.fn().mockResolvedValue({ error: null })
