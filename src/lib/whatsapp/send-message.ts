@@ -436,8 +436,15 @@ export async function sendMessageToConversation(
 
     if (lastError) throw lastError;
   } catch (err) {
-    const message =
+    const base =
       err instanceof Error ? err.message : 'Unknown Meta API error';
+    // Meta's error_data.details says exactly what was wrong (e.g. which
+    // component's param count). Keep it so API callers can see it.
+    const details =
+      err && typeof err === 'object' && 'details' in err && typeof (err as { details?: unknown }).details === 'string'
+        ? (err as { details: string }).details
+        : '';
+    const message = details ? `${base} | ${details}` : base;
     console.error('[send-message] Meta send failed for all variants:', message);
     throw new SendMessageError('meta_error', `Meta API error: ${message}`, 502);
   }
