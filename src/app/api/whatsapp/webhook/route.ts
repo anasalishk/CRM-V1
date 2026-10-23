@@ -587,6 +587,9 @@ async function handleStatusUpdate(status: {
           whatsapp_message_id: status.id,
           conversation_id: msgRow.conversation_id,
           status: status.status,
+          ...(failure
+            ? { error_code: failure.code, error_title: failure.title, error_details: failure.details }
+            : {}),
         }
       )
     }
