@@ -440,6 +440,8 @@ describe('inbound webhook: idempotent insert (#367)', () => {
         interactive_reply_id: null,
         context_message_id: null,
         flow_response: null,
+        media_id: null,
+        media_type: null,
       }
     )
   })
@@ -534,6 +536,8 @@ describe('inbound webhook: template quick-reply buttons (#478)', () => {
         interactive_reply_id: 'YES_INTERESTED',
         context_message_id: 'wamid.BROADCAST1',
         flow_response: null,
+        media_id: null,
+        media_type: null,
       }
     )
   })

@@ -1084,6 +1084,11 @@ async function processMessage(
     context_message_id: message.context?.id ?? null,
     // WhatsApp Flow (form) answers, parsed. Null for every other message.
     flow_response: flowResponse ?? null,
+    // Attachments: Meta media id (download via GET /api/v1/media/{id}) and
+    // its MIME type. Null for text/interactive messages.
+    media_id:
+      message.image?.id ?? message.document?.id ?? message.video?.id ?? message.audio?.id ?? message.sticker?.id ?? null,
+    media_type: mediaType ?? null,
   })
 }
 
