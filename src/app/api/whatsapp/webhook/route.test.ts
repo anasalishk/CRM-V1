@@ -439,6 +439,7 @@ describe('inbound webhook: idempotent insert (#367)', () => {
         text: 'hello',
         interactive_reply_id: null,
         context_message_id: null,
+        flow_response: null,
       }
     )
   })
@@ -532,6 +533,7 @@ describe('inbound webhook: template quick-reply buttons (#478)', () => {
         text: 'Yes, interested',
         interactive_reply_id: 'YES_INTERESTED',
         context_message_id: 'wamid.BROADCAST1',
+        flow_response: null,
       }
     )
   })
@@ -1085,5 +1087,56 @@ describe('inbound webhook: automation waiting for a reply', () => {
     await runWebhook()
 
     expect(h.resumeAwaitingReply).not.toHaveBeenCalled()
+  })
+})
+
+describe('inbound webhook: WhatsApp Flow (form) submitted', () => {
+  const formReply = {
+    id: 'wamid.FORM1',
+    from: '15551230000',
+    timestamp: '1700000000',
+    type: 'interactive',
+    interactive: {
+      type: 'nfm_reply',
+      nfm_reply: {
+        name: 'flow',
+        body: 'Sent',
+        response_json: JSON.stringify({ flow_token: 'ob:42', name: 'Sana Khan', classes: ['6-8', '9-10'] }),
+      },
+    },
+  }
+
+  it('forwards the parsed answers to the public webhook and keeps the AI out', async () => {
+    await runWebhook(formReply)
+
+    expect(h.state.upsertCalls[0].row).toMatchObject({
+      content_type: 'interactive',
+      content_text: '[Form submitted]',
+      interactive_reply_id: 'flow_reply',
+    })
+    expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled()
+    expect(h.dispatchWebhookEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'acc-1',
+      'message.received',
+      expect.objectContaining({
+        text: '[Form submitted]',
+        interactive_reply_id: 'flow_reply',
+        flow_response: { flow_token: 'ob:42', name: 'Sana Khan', classes: ['6-8', '9-10'] },
+      }),
+    )
+  })
+
+  it('bad JSON in the answers still stores the message, with no answers', async () => {
+    await runWebhook({
+      ...formReply,
+      interactive: { type: 'nfm_reply', nfm_reply: { name: 'flow', response_json: '{oops' } },
+    })
+    expect(h.dispatchWebhookEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'acc-1',
+      'message.received',
+      expect.objectContaining({ flow_response: null }),
+    )
   })
 })

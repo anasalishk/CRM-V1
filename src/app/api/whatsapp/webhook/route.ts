@@ -79,9 +79,11 @@ interface WhatsAppMessage {
    * to advance the per-contact run.
    */
   interactive?: {
-    type: 'button_reply' | 'list_reply'
+    type: 'button_reply' | 'list_reply' | 'nfm_reply'
     button_reply?: { id: string; title: string }
     list_reply?: { id: string; title: string; description?: string }
+    /** WhatsApp Flow (form) submitted: answers as a JSON string. */
+    nfm_reply?: { name?: string; body?: string; response_json?: string }
   }
   /**
    * Set when the customer taps a QUICK_REPLY button on a *template*
@@ -785,7 +787,7 @@ async function processMessage(
   }
 
   // Parse message content based on type
-  const { contentText, mediaUrl, mediaType, interactiveReplyId } =
+  const { contentText, mediaUrl, mediaType, interactiveReplyId, flowResponse } =
     await parseMessageContent(
       message,
       accessToken,
@@ -1080,6 +1082,8 @@ async function processMessage(
     text: contentText,
     interactive_reply_id: interactiveReplyId ?? null,
     context_message_id: message.context?.id ?? null,
+    // WhatsApp Flow (form) answers, parsed. Null for every other message.
+    flow_response: flowResponse ?? null,
   })
 }
 
@@ -1101,6 +1105,8 @@ async function parseMessageContent(
    * tap with the right affordance. Null for everything else.
    */
   interactiveReplyId: string | null
+  /** Parsed answers of a submitted WhatsApp Flow (form); null otherwise. */
+  flowResponse?: Record<string, unknown> | null
 }> {
   // getMediaUrl signature is (mediaId, accessToken) — earlier code had
   // the args swapped, so every verification hit an invalid Meta URL and
@@ -1247,6 +1253,25 @@ async function parseMessageContent(
       // Use the human-readable title as contentText so the inbox bubble
       // renders the tap legibly ("Existing customer"), and stash the
       // stable id separately so the Flows engine can route on it.
+      // A WhatsApp Flow (form) was submitted. The answers arrive as a JSON
+      // string; forward them parsed. `flow_reply` as the reply id keeps
+      // the AI auto-reply away from it (it only handles plain text).
+      const nfm = message.interactive?.nfm_reply
+      if (message.interactive?.type === 'nfm_reply' || nfm) {
+        let parsed: Record<string, unknown> | null = null
+        try {
+          const v = JSON.parse(nfm?.response_json || 'null')
+          if (v && typeof v === 'object' && !Array.isArray(v)) parsed = v as Record<string, unknown>
+        } catch {
+          parsed = null
+        }
+        return {
+          ...empty,
+          contentText: '[Form submitted]',
+          interactiveReplyId: 'flow_reply',
+          flowResponse: parsed,
+        }
+      }
       const reply =
         message.interactive?.button_reply ?? message.interactive?.list_reply
       if (reply?.id) {

@@ -1099,6 +1099,83 @@ export async function sendInteractiveButtons(
   return { messageId: data.messages[0].id }
 }
 
+export interface SendInteractiveFlowArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  bodyText: string
+  headerText?: string
+  footerText?: string
+  flowId: string
+  flowCta: string
+  flowToken?: string
+  screen?: string
+  data?: Record<string, unknown>
+  mode?: 'draft' | 'published'
+  contextMessageId?: string
+}
+
+/**
+ * Send a WhatsApp Flow (form) message. Without `screen` the Flow opens on
+ * its first screen; with `screen` (+ optional `data`) it opens there with
+ * that data (`flow_action: navigate`).
+ */
+export async function sendInteractiveFlow(
+  args: SendInteractiveFlowArgs
+): Promise<MetaSendResult> {
+  const {
+    phoneNumberId, accessToken, to, bodyText, headerText, footerText,
+    flowId, flowCta, flowToken, screen, data, mode, contextMessageId,
+  } = args
+  validateInteractiveBody(bodyText)
+  validateInteractiveHeaderFooter(headerText, footerText)
+  if (!flowId) throw new Error('Flow id is required.')
+  if (!flowCta || flowCta.length > INTERACTIVE_LIMITS.buttonTitleMaxLength) {
+    throw new Error(`Flow button label must be 1-${INTERACTIVE_LIMITS.buttonTitleMaxLength} characters.`)
+  }
+  const parameters: Record<string, unknown> = {
+    flow_message_version: '3',
+    flow_id: flowId,
+    flow_cta: flowCta,
+    flow_action: 'navigate',
+  }
+  if (flowToken) parameters.flow_token = flowToken
+  if (mode === 'draft') parameters.mode = 'draft'
+  if (screen) {
+    parameters.flow_action_payload = data && Object.keys(data).length ? { screen, data } : { screen }
+  }
+  const interactive: Record<string, unknown> = {
+    type: 'flow',
+    body: { text: bodyText },
+    action: { name: 'flow', parameters },
+  }
+  if (headerText) interactive.header = { type: 'text', text: headerText }
+  if (footerText) interactive.footer = { text: footerText }
+
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    ...recipientFields(to),
+    type: 'interactive',
+    interactive,
+  }
+  if (contextMessageId) body.context = { message_id: contextMessageId }
+
+  const url = `${META_API_BASE}/${phoneNumberId}/messages`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const json = await response.json()
+  return { messageId: json.messages[0].id }
+}
+
 export interface InteractiveListRow {
   /** Stable id sent back in the webhook when tapped (≤ 200 chars). */
   id: string

@@ -68,9 +68,35 @@ export interface InteractiveListPayload {
   sections: InteractiveListSection[]
 }
 
+/**
+ * A WhatsApp Flow (form) message: body text plus one CTA button that
+ * opens the published (or draft) Flow on the customer's phone. The
+ * customer's submitted answers come back in the webhook as
+ * `interactive.nfm_reply`.
+ */
+export interface InteractiveFlowPayload {
+  kind: 'flow'
+  body: string
+  header?: string
+  footer?: string
+  /** Meta Flow ID (from WhatsApp Manager → Flows). */
+  flow_id: string
+  /** CTA button label (≤ 20 chars). */
+  flow_cta: string
+  /** Opaque token echoed back with the answers (our own correlation id). */
+  flow_token?: string
+  /** First screen to open (`navigate`). */
+  screen?: string
+  /** Initial data for that screen (e.g. prefilled values). */
+  data?: Record<string, unknown>
+  /** 'draft' lets an unpublished Flow be sent (testing only). */
+  mode?: 'draft' | 'published'
+}
+
 export type InteractiveMessagePayload =
   | InteractiveButtonsPayload
   | InteractiveListPayload
+  | InteractiveFlowPayload
 
 export type InteractiveValidation =
   | { ok: true }
@@ -223,7 +249,32 @@ export function validateInteractivePayload(
     return ok()
   }
 
-  return fail('Interactive message must be reply buttons or a list.')
+  if (p.kind === 'flow') {
+    const f = p as InteractiveFlowPayload
+    if (typeof f.flow_id !== 'string' || !/^\d+$/.test(f.flow_id.trim())) {
+      return fail('A flow message needs a numeric flow_id.')
+    }
+    if (typeof f.flow_cta !== 'string' || f.flow_cta.trim() === '') {
+      return fail('A flow message needs a button label (flow_cta).')
+    }
+    if (f.flow_cta.length > INTERACTIVE_LIMITS.buttonTitleMaxLength) {
+      return fail(
+        `Flow button label exceeds the ${INTERACTIVE_LIMITS.buttonTitleMaxLength}-character limit.`,
+      )
+    }
+    if (f.mode !== undefined && f.mode !== 'draft' && f.mode !== 'published') {
+      return fail('Flow mode must be "draft" or "published".')
+    }
+    if (f.data !== undefined && (typeof f.data !== 'object' || f.data === null || Array.isArray(f.data))) {
+      return fail('Flow data must be an object.')
+    }
+    if (f.data !== undefined && (typeof f.screen !== 'string' || f.screen.trim() === '')) {
+      return fail('Flow data needs the screen it belongs to.')
+    }
+    return ok()
+  }
+
+  return fail('Interactive message must be reply buttons, a list or a flow.')
 }
 
 /**
@@ -235,5 +286,5 @@ export function interactivePayloadPreviewText(
 ): string {
   const body = payload.body?.trim()
   if (body) return body
-  return payload.kind === 'buttons' ? '[buttons]' : '[list]'
+  return payload.kind === 'buttons' ? '[buttons]' : payload.kind === 'flow' ? '[form]' : '[list]'
 }

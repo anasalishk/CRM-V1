@@ -27,6 +27,7 @@ import {
   sendMediaMessage,
   sendInteractiveButtons,
   sendInteractiveList,
+  sendInteractiveFlow,
   type MediaKind,
 } from '@/lib/whatsapp/meta-api';
 import {
@@ -378,6 +379,24 @@ export async function sendMessageToConversation(
           headerText: p.header || undefined,
           footerText: p.footer || undefined,
           buttons: p.buttons,
+          contextMessageId,
+        });
+        return result.messageId;
+      }
+      if (p.kind === 'flow') {
+        const result = await sendInteractiveFlow({
+          phoneNumberId: config.phone_number_id,
+          accessToken,
+          to: phone,
+          bodyText: p.body,
+          headerText: p.header || undefined,
+          footerText: p.footer || undefined,
+          flowId: p.flow_id,
+          flowCta: p.flow_cta,
+          flowToken: p.flow_token || undefined,
+          screen: p.screen || undefined,
+          data: p.data,
+          mode: p.mode,
           contextMessageId,
         });
         return result.messageId;

@@ -152,9 +152,9 @@ export function InteractiveBuilder({
 
           {value.kind === "buttons" ? (
             <ButtonsEditor value={value} onChange={onChange} advanced={advanced} />
-          ) : (
+          ) : value.kind === "list" ? (
             <ListEditor value={value} onChange={onChange} advanced={advanced} />
-          )}
+          ) : null}
 
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <input

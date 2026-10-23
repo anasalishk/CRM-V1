@@ -3,6 +3,7 @@ import {
   INTERACTIVE_LIMITS,
   sendInteractiveButtons,
   sendInteractiveList,
+  sendInteractiveFlow,
 } from "./meta-api";
 
 // All assertions in this file run BEFORE the network call. We stub fetch
@@ -265,5 +266,51 @@ describe("sendInteractiveList — validation", () => {
         },
       },
     });
+  });
+});
+
+describe("sendInteractiveFlow — request body", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends a draft flow opening on a screen with prefilled data", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ messages: [{ id: "wamid.F1" }] }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await sendInteractiveFlow({
+      ...BASE_ARGS,
+      flowId: "123",
+      flowCta: "Profile banayein",
+      flowToken: "ob:42",
+      screen: "ABOUT",
+      data: { name: "Sana" },
+      mode: "draft",
+    });
+    expect(r.messageId).toBe("wamid.F1");
+    const sent = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(sent.type).toBe("interactive");
+    expect(sent.interactive).toEqual({
+      type: "flow",
+      body: { text: "Body text" },
+      action: {
+        name: "flow",
+        parameters: {
+          flow_message_version: "3",
+          flow_id: "123",
+          flow_cta: "Profile banayein",
+          flow_action: "navigate",
+          flow_token: "ob:42",
+          mode: "draft",
+          flow_action_payload: { screen: "ABOUT", data: { name: "Sana" } },
+        },
+      },
+    });
+  });
+
+  it("rejects a too-long button label before the network call", async () => {
+    vi.stubGlobal("fetch", vi.fn(neverFetch));
+    await expect(
+      sendInteractiveFlow({ ...BASE_ARGS, flowId: "1", flowCta: "x".repeat(21) }),
+    ).rejects.toThrow();
   });
 });

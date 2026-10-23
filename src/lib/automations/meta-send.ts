@@ -98,6 +98,10 @@ export async function engineSendInteractive(
       buttons: payload.buttons,
     })
   }
+  if (payload.kind !== 'list') {
+    // Flow (form) messages are sent through the public API only.
+    throw new Error('Automations cannot send a flow (form) message.')
+  }
   return engineSendInteractiveList({
     ...common,
     bodyText: payload.body,

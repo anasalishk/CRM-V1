@@ -140,3 +140,33 @@ describe('interactivePayloadPreviewText', () => {
     expect(interactivePayloadPreviewText({ ...validList, body: '' })).toBe('[list]')
   })
 })
+
+describe('validateInteractivePayload — flow (form)', () => {
+  const flow = {
+    kind: 'flow' as const,
+    body: 'Profile banane ke liye neeche button dabayein.',
+    flow_id: '1234567890',
+    flow_cta: 'Profile banayein',
+    flow_token: 'ob:42',
+    screen: 'ABOUT',
+    data: { name: 'Sana Khan' },
+    mode: 'draft' as const,
+  }
+  it('accepts a valid flow message', () => {
+    expect(validateInteractivePayload(flow)).toEqual({ ok: true })
+  })
+  it('needs a numeric flow id', () => {
+    expect(validateInteractivePayload({ ...flow, flow_id: 'abc' }).ok).toBe(false)
+  })
+  it('needs a button label within 20 characters', () => {
+    expect(validateInteractivePayload({ ...flow, flow_cta: '' }).ok).toBe(false)
+    expect(validateInteractivePayload({ ...flow, flow_cta: 'x'.repeat(21) }).ok).toBe(false)
+  })
+  it('rejects an unknown mode and data without a screen', () => {
+    expect(validateInteractivePayload({ ...flow, mode: 'live' }).ok).toBe(false)
+    expect(validateInteractivePayload({ ...flow, screen: undefined }).ok).toBe(false)
+  })
+  it('previews as the body text', () => {
+    expect(interactivePayloadPreviewText(flow)).toBe(flow.body)
+  })
+})
