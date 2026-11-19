@@ -132,7 +132,9 @@ function buildBodyComponent(
 ): MetaSendComponent | null {
   const varCount = extractVariableIndices(template.body_text).length;
   const body = params.body ?? [];
-  if (varCount === 0 && body.length === 0) return null;
+  // No variables in the body -> no body component at all, even if a legacy
+  // caller passed values (Meta rejects an empty `parameters` list).
+  if (varCount === 0) return null;
   if (body.length < varCount) {
     throw new Error(
       t('bodyValuesMissing', { count: varCount, got: body.length }),

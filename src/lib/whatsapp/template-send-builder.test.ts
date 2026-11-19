@@ -20,6 +20,15 @@ describe('buildSendComponents — body', () => {
     expect(buildSendComponents(row())).toEqual([]);
   });
 
+  it('skips the body when the template has no variables, even if values were passed', () => {
+    expect(
+      buildSendComponents(
+        row({ body_text: 'Admin, naye updates pending hain.', buttons: [{ type: 'QUICK_REPLY', text: 'Updates dikhao' }] as MessageTemplate['buttons'] }),
+        { body: ['naye'] },
+      ).some((c) => c.type === 'body'),
+    ).toBe(false);
+  });
+
   it('emits a body component when the template has variables', () => {
     const components = buildSendComponents(
       row({ body_text: 'Hi {{1}}, order {{2}} confirmed.' }),
